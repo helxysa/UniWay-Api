@@ -1,10 +1,18 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt'; 
+import cors from 'cors';
+
+
+
 
 const app = express();
-const prisma = new PrismaClient();
 
+app.use(cors());
+const prisma = new PrismaClient();
+const bodyParser = require('body-parser');
+
+app.use(bodyParser.json());
 app.use(express.json());
 
 app.get('/users', async (req, res) => {
@@ -19,16 +27,41 @@ app.get('/users', async (req, res) => {
   res.json(users);
 });
 
+app.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+
+    const { password: _, ...userWithoutPassword } = user;
+
+    res.json({ user: userWithoutPassword, message: 'Login bem-sucedido' });
+  } catch (error) {
+    console.error('Erro ao fazer login:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 app.post('/users', async (req, res) => {
   try {
     const { name, email, course, password } = req.body;
 
-    // Validação básica
     if (!name || !email || !course || !password) {
       return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
     }
 
-    // Verificar se o e-mail já está em uso
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ error: 'E-mail já está em uso' });
